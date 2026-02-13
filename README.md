@@ -40,7 +40,7 @@ By the end of this workshop, you should be able to:
 ### Install ROS 2
 
 Follow the official ROS 2 installation guide:
-👉 <https://docs.ros.org/en/jazzy/Installation.html>
+👉 https://docs.ros.org/en/jazzy/Installation.html
 
 After installation, don't forget to source ROS 2:
 
@@ -60,7 +60,7 @@ echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 
 ### ROS 2 Workspace Structure
 
-```text
+```
 ros2_ws/                        # Workspace root
 ├── src/                        # Source space (your packages go here)
 │   └── my_robot_package/
@@ -71,7 +71,7 @@ ros2_ws/                        # Workspace root
 
 ### Python Package Structure
 
-```text
+```
 my_robot_package/
 ├── package.xml                 # Package metadata and dependencies
 ├── setup.py                    # Python package setup (for Python packages)
@@ -145,7 +145,7 @@ This is the fundamental communication pattern in ROS 2.
 
 Your package should have this structure:
 
-```text
+```
 py_example/
 ├── package.xml
 ├── setup.py
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     main()
 ```
 
-### Publisher: Code Explanation
+### Code Explanation
 
 **Imports:**
 
@@ -292,7 +292,7 @@ if __name__ == '__main__':
     main()
 ```
 
-### Subscriber: Code Explanation
+### Code Explanation
 
 **Creating the Subscription:**
 
@@ -432,7 +432,7 @@ When you run both nodes:
 
 The publisher will show:
 
-```text
+```
 [INFO] [simple_publisher]: Publisher node started!
 [INFO] [simple_publisher]: Publishing: "Hello ROS 2! 0"
 [INFO] [simple_publisher]: Publishing: "Hello ROS 2! 1"
@@ -441,7 +441,7 @@ The publisher will show:
 
 The subscriber will show:
 
-```text
+```
 [INFO] [simple_subscriber]: Subscriber node started!
 [INFO] [simple_subscriber]: I heard: "Hello ROS 2! 0"
 [INFO] [simple_subscriber]: I heard: "Hello ROS 2! 1"
@@ -450,15 +450,195 @@ The subscriber will show:
 
 ---
 
+## Adding Parameters
+
+### What are Parameters?
+
+Parameters allow you to configure your nodes without changing code. They can be set when launching a node or changed while it's running.
+
+### Publisher with Parameters
+
+Let's modify our publisher to use a parameter for the message. Update `py_example/publisher_node.py`:
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class SimplePublisher(Node):
+    def __init__(self):
+        super().__init__('simple_publisher')
+        
+        # Declare a parameter with a default value
+        self.declare_parameter('message', 'Hello ROS 2!')
+        
+        # Get the parameter value
+        self.message = self.get_parameter('message').value
+        
+        self.publisher_ = self.create_publisher(String, 'chatter', 10)
+        self.timer = self.create_timer(1.0, self.publish_message)
+        self.counter = 0
+        self.get_logger().info(f'Publisher started with message: {self.message}')
+
+    def publish_message(self):
+        msg = String()
+        msg.data = f'{self.message} {self.counter}'
+        self.publisher_.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+        self.counter += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SimplePublisher()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### What Changed?
+
+**Declaring the parameter:**
+
+```python
+self.declare_parameter('message', 'Hello ROS 2!')
+```
+
+- `'message'`: parameter name
+- `'Hello ROS 2!'`: default value
+
+**Using the parameter:**
+
+```python
+self.message = self.get_parameter('message').value
+```
+
+Gets the current value of the parameter.
+
+### Running with Different Messages
+
+**Run with default message:**
+
+```bash
+ros2 run py_example publisher
+```
+
+**Run with custom message:**
+
+```bash
+ros2 run py_example publisher --ros-args -p message:="Greetings from"
+```
+
+### Parameter Commands
+
+While the node is running, try these commands in another terminal:
+
+**List parameters:**
+
+```bash
+ros2 param list
+```
+
+**Get parameter value:**
+
+```bash
+ros2 param get /simple_publisher message
+```
+
+---
+
+## Launch Files
+
+### Why Launch Files?
+
+So far, we've had to open separate terminals for every node. Launch files allow you to start multiple nodes (and even other launch files) with a single command.
+
+### Creating a Launch File
+
+1.  Create a `launch` directory in your package:
+
+    ```bash
+    mkdir launch
+    ```
+
+2.  Create a new file `launch/py_example.launch.py`:
+
+    ```python
+    from launch import LaunchDescription
+    from launch_ros.actions import Node
+
+    def generate_launch_description():
+        return LaunchDescription([
+            Node(
+                package='py_example',
+                executable='publisher',
+                name='publisher_node'
+            ),
+            Node(
+                package='py_example',
+                executable='subscriber',
+                name='subscriber_node'
+            )
+        ])
+    ```
+
+### Registering Launch Files
+
+We need to tell ROS 2 to include our launch files when building the package.
+
+1.  Open `setup.py`.
+2.  Add the imports at the top:
+
+    ```python
+    import os
+    from glob import glob
+    ```
+
+3.  Update the `data_files` list to include the launch directory:
+
+    ```python
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        # Add this line:
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
+    ],
+    ```
+
+### Build and Run
+
+1.  Rebuild your workspace:
+
+    ```bash
+    cd ~/ros2_ws
+    colcon build
+    source install/setup.bash
+    ```
+
+2.  Run the launch file:
+
+    ```bash
+    ros2 launch py_example py_example.launch.py
+    ```
+
+    You should see output from both the publisher and subscriber in the same terminal!
+
+---
+
 ## Next Steps
 
-After mastering publisher and subscriber:
+After mastering publisher, subscriber, and parameters:
 
 - Try using different message types
 - Create custom message types
 - Learn about services for request-response patterns
 - Explore launch files to start multiple nodes together
-- Add parameters to configure your nodes
 
 ---
 
@@ -466,5 +646,5 @@ After mastering publisher and subscriber:
 
 ### Official Documentation
 
-- ROS 2 Docs: <https://docs.ros.org/en/jazzy/>
-- ROS 2 Tutorials: <https://docs.ros.org/en/jazzy/Tutorials.html>
+- ROS 2 Docs: https://docs.ros.org/en/jazzy/
+- ROS 2 Tutorials: https://docs.ros.org/en/jazzy/Tutorials.html

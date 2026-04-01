@@ -631,14 +631,253 @@ We need to tell ROS 2 to include our launch files when building the package.
 
 ---
 
+## Services
+
+### What are Services?
+
+While topics are great for continuous data streams, **services** are used for **request-response** interactions. A service client sends a request and waits for the server to respond.
+
+**Use services when:**
+- You need an immediate response
+- You're performing a specific action (e.g., calculate something, trigger a behavior)
+- The operation should complete before continuing
+
+### Service Server
+
+Create `py_example/service_server.py`:
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+
+class AddTwoIntsServer(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_server')
+        self.srv = self.create_service(
+            AddTwoInts,
+            'add_two_ints',
+            self.add_two_ints_callback
+        )
+        self.get_logger().info('AddTwoInts server ready!')
+
+    def add_two_ints_callback(self, request, response):
+        response.sum = request.a + request.b
+        self.get_logger().info(f'Incoming request: a={request.a}, b={request.b} -> sum={response.sum}')
+        return response
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = AddTwoIntsServer()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Code Explanation
+
+**Service Type:**
+
+```python
+from example_interfaces.srv import AddTwoInts
+```
+
+`AddTwoInts` is a standard service with two request fields (`a`, `b`) and one response field (`sum`).
+
+**Creating the Service:**
+
+```python
+self.srv = self.create_service(AddTwoInts, 'add_two_ints', self.add_two_ints_callback)
+```
+
+- `AddTwoInts`: Service message type
+- `'add_two_ints'`: Service name (topic-like name)
+- `self.add_two_ints_callback`: Function to handle requests
+
+**Service Callback:**
+
+```python
+def add_two_ints_callback(self, request, response):
+    response.sum = request.a + request.b
+    return response
+```
+
+- Receives `request` and `response` objects
+- Populates the response
+- **Must return the response**
+
+### Service Client
+
+Create `py_example/service_client.py`:
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+
+class AddTwoIntsClient(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_client')
+        self.client = self.create_client(AddTwoInts, 'add_two_ints')
+
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting...')
+
+        self.request = AddTwoInts.Request()
+
+    def send_request(self, a, b):
+        self.request.a = a
+        self.request.b = b
+        self.get_logger().info(f'Sending request: a={a}, b={b}')
+        future = self.client.call_async(self.request)
+        rclpy.spin_until_future_complete(self, future)
+        return future.result()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    client = AddTwoIntsClient()
+    response = client.send_request(5, 3)
+    client.get_logger().info(f'Result: {response.sum}')
+    client.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Client Code Explanation
+
+**Wait for Service:**
+
+```python
+while not self.client.wait_for_service(timeout_sec=1.0):
+    self.get_logger().info('Service not available, waiting...')
+```
+
+Blocks until the service is ready.
+
+**Send Request:**
+
+```python
+future = self.client.call_async(self.request)
+rclpy.spin_until_future_complete(self, future)
+return future.result()
+```
+
+- `call_async()`: Sends the request
+- `spin_until_future_complete()`: Waits for the response
+- `future.result()`: Returns the response
+
+### Registering Service Nodes
+
+Add to `setup.py`:
+
+```python
+entry_points={
+    'console_scripts': [
+        'talker = py_example.simple_publisher:main',
+        'listener = py_example.simple_subscriber:main',
+        'talker_params = py_example.publisher_param:main',
+        'add_two_ints_server = py_example.service_server:main',
+        'add_two_ints_client = py_example.service_client:main',
+    ],
+},
+```
+
+### Add Service Dependency
+
+Update `package.xml` to include the service interface package:
+
+```xml
+<depend>rclpy</depend>
+<depend>std_msgs</depend>
+<depend>example_interfaces</depend>
+```
+
+### Running Services
+
+**Terminal 1 - Start the server:**
+
+```bash
+ros2 run py_example add_two_ints_server
+```
+
+**Terminal 2 - Call the service with client:**
+
+```bash
+ros2 run py_example add_two_ints_client
+```
+
+**Or use ROS 2 CLI to test:**
+
+```bash
+# List available services
+ros2 service list
+
+# Call the service from command line
+ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 10, b: 20}"
+```
+
+### Launch File for Services
+
+Create `launch/services.launch.py`:
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        Node(
+            package='py_example',
+            executable='add_two_ints_server',
+            name='add_two_ints_server',
+            output='screen',
+        ),
+        Node(
+            package='py_example',
+            executable='add_two_ints_client',
+            name='add_two_ints_client',
+            output='screen',
+        ),
+    ])
+```
+
+Run both together:
+
+```bash
+ros2 launch py_example services.launch.py
+```
+
+### Services vs Topics Summary
+
+| Feature | Topics | Services |
+|---------|--------|----------|
+| Pattern | Pub/Sub | Request/Response |
+| Direction | Many-to-many | One-to-one |
+| Response | None | Yes |
+| Use case | Continuous data | Commands/Queries |
+| Example | Sensor data | Calculate sum |
+
+---
+
 ## Next Steps
 
-After mastering publisher, subscriber, and parameters:
+After mastering publishers, subscribers, parameters, and services:
 
 - Try using different message types
-- Create custom message types
-- Learn about services for request-response patterns
-- Explore launch files to start multiple nodes together
+- Create custom message types and services
+- Learn about actions for long-running tasks
+- Explore ROS 2 bags for recording/playback
 
 ---
 

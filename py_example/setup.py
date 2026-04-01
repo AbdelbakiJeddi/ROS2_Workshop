@@ -30,8 +30,6 @@ setup(
             'talker = py_example.simple_publisher:main',
             'listener = py_example.simple_subscriber:main',
             'talker_params = py_example.publisher_param:main',
-            'add_two_ints_server = py_example.service_server:main',
-            'add_two_ints_client = py_example.service_client:main',
         ],
     },
 )

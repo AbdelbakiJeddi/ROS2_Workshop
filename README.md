@@ -1,336 +1,200 @@
-# ROS 2 Introduction Workshop
+# Feature 06: Robot Description Package (URDF)
 
-Welcome to the **ROS 2 Introduction Workshop** repository!
-
-This repository contains all the material, code examples, and useful resources used during the workshop. The goal is to give you a **practical and beginner-friendly introduction to ROS 2**, with hands-on examples you can run on your own machine.
-
----
-
-## Workshop Objectives
-
-By the end of this workshop, you should be able to:
-
-- Understand what ROS 2 is and why it is used
-- Explain core ROS 2 concepts (nodes, topics, services, packages)
-- Create and run your own ROS 2 nodes
-- Build and run a ROS 2 workspace
-- Use basic ROS 2 command-line tools
+This branch covers creating a robot description package with URDF and visualizing it in RViz.
 
 ---
 
 ## Prerequisites
 
-### Operating System
-
-- Ubuntu 24.04 or 22.04
-
-### ROS 2 Distribution
-
-- **ROS 2 Jazzy or Humble** (LTS, recommended)
-
-### Required Skills
-
-- Basic Linux terminal usage
-- Basic Python programming (helpful but not mandatory)
+Complete these branches first:
+- `feature/01-turtlesim` - ROS 2 basics
+- `feature/02-publisher-subscriber` - Nodes and topics
+- `feature/04-launch-files` - Launch system
 
 ---
 
-## Installation Guide
+## Learning Objectives
 
-### Install ROS 2
+By the end of this branch, you will:
+- Understand what URDF is and why it's used
+- Create a robot description package
+- Define links and joints in URDF
+- Visualize your robot in RViz
+- Troubleshoot common URDF/RViz issues
 
-Follow the official ROS 2 installation guide:
-👉 https://docs.ros.org/en/jazzy/Installation.html
+---
 
-After installation, don't forget to source ROS 2:
+## What is URDF?
+
+**URDF (Unified Robot Description Format)** is an XML format that describes your robot's:
+- **Physical structure** - Links (rigid bodies) and joints (connections)
+- **Visual geometry** - What the robot looks like (colors, shapes, meshes)
+- **Collision properties** - Simplified geometry for collision detection
+- **Inertial properties** - Mass and inertia for simulation
+
+### The Robot Tree
+
+ROS 2 robots are organized as a **tree of coordinate frames**:
+
+```
+base_link (root)
+    ├── wheel_left_link
+    └── wheel_right_link
+```
+
+- **Links** = rigid bodies (the "nodes" of the tree)
+- **Joints** = connections between links (the "edges" of the tree)
+- **TF transforms** = mathematical relationship between coordinate frames
+
+---
+
+## Creating the Robot Description Package
+
+### Step 1: Create the Package
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_python my_robot_description
+cd my_robot_description
 ```
 
-(Optional) Add it permanently:
+### Step 2: Create Directory Structure
 
 ```bash
-echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+mkdir -p urdf meshes config launch
+```
+
+| Directory | Purpose |
+|-----------|---------|
+| `urdf/` | URDF robot description files |
+| `meshes/` | 3D model files (STL, DAE) |
+| `config/` | RViz configurations |
+| `launch/` | Launch files |
+
+### Step 3: Create the URDF File
+
+Create `urdf/my_robot.urdf`:
+
+```xml
+<?xml version="1.0"?>
+<robot name="my_robot">
+
+    <!-- Base link -->
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="0.4 0.3 0.1"/>
+            </geometry>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <material name="blue">
+                <color rgba="0 0 0.8 1"/>
+            </material>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.4 0.3 0.1"/>
+            </geometry>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+        </collision>
+        <inertial>
+            <mass value="1.0"/>
+            <inertia ixx="0.1" ixy="0.0" ixz="0.0" iyy="0.1" iyz="0.0" izz="0.1"/>
+        </inertial>
+    </link>
+
+    <!-- Right wheel -->
+    <link name="wheel_right_link">
+        <visual>
+            <geometry>
+                <cylinder radius="0.05" length="0.02"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="1.57 0 0"/>
+            <material name="gray">
+                <color rgba="0.5 0.5 0.5 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <!-- Joint: base_link → wheel_right_link -->
+    <joint name="wheel_right_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="wheel_right_link"/>
+        <origin xyz="0 -0.15 0.05" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <!-- Left wheel -->
+    <link name="wheel_left_link">
+        <visual>
+            <geometry>
+                <cylinder radius="0.05" length="0.02"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="1.57 0 0"/>
+            <material name="gray"/>
+        </visual>
+    </link>
+
+    <!-- Joint: base_link → wheel_left_link -->
+    <joint name="wheel_left_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="wheel_left_link"/>
+        <origin xyz="0 0.15 0.05" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+</robot>
+```
+
+### URDF Element Breakdown
+
+#### Link Elements
+
+| Element | Purpose |
+|---------|---------|
+| `<visual>` | What you see in RViz |
+| `<collision>` | Simplified shape for physics |
+| `<inertial>` | Mass properties for simulation |
+
+#### Joint Types
+
+| Type | Behavior |
+|------|----------|
+| `fixed` | No movement |
+| `continuous` | Infinite rotation (like wheels) |
+| `revolute` | Limited rotation (with limits) |
+| `prismatic` | Sliding motion |
+
+#### Origin Attributes
+
+- `xyz` - Position offset (x, y, z in meters)
+- `rpy` - Orientation (roll, pitch, yaw in radians)
+
+---
+
+### Step 4: Update package.xml
+
+Add these dependencies:
+
+```xml
+<depend>urdf</depend>
+<depend>xacro</depend>
+<depend>joint_state_publisher</depend>
+<depend>robot_state_publisher</depend>
+<depend>rviz2</depend>
 ```
 
 ---
 
-## Repository Structure
+### Step 5: Update setup.py
 
-### ROS 2 Workspace Structure
-
-```
-ros2_ws/                        # Workspace root
-├── src/                        # Source space (your packages go here)
-│   └── my_robot_package/
-├── build/                      # Build space (auto-generated)
-├── install/                    # Install space (auto-generated)
-└── log/
-```
-
-### Python Package Structure
-
-```
-my_robot_package/
-├── package.xml                 # Package metadata and dependencies
-├── setup.py                    # Python package setup (for Python packages)
-├── setup.cfg                   # Python package configuration
-├── my_robot_package/           # Python source code directory
-│   └── __init__.py             # Makes it a Python package
-```
-
----
-
-## Getting Started
-
-### Running Your First ROS 2 Nodes (Turtlesim)
-
-Before diving into custom code, let's make sure your ROS 2 installation works by running a classic demo: **Turtlesim** 🐢
-
-#### Run the Turtlesim Node 🐢
-
-Open a terminal and run:
-
-```bash
-ros2 run turtlesim turtlesim_node
-```
-
-> You should see a small window with a turtle.
-
-#### Control the Turtle
-
-Open a new terminal and run:
-
-```bash
-ros2 run turtlesim turtle_teleop_key
-```
-
-> Use your keyboard arrows to move the turtle.
-
-#### Explore What's Running
-
-While Turtlesim is running, try the following commands in another terminal:
-
-```bash
-ros2 node list
-ros2 topic list
-ros2 topic echo /turtle1/pose
-```
-
-#### Visualize the System (Optional)
-
-```bash
-rqt_graph
-```
-
-This will show a graph of nodes and topics.
-
----
-
-## Hands-On Examples
-
-### Overview
-
-In this guide, you will create two ROS 2 nodes:
-
-- A **publisher node** that sends messages on a topic
-- A **subscriber node** that receives and prints those messages
-
-This is the fundamental communication pattern in ROS 2.
-
----
-
-### Package Structure
-
-Your package should have this structure:
-
-```
-py_example/
-├── package.xml
-├── setup.py
-├── setup.cfg
-├── resource/
-│   └── py_example
-└── py_example/
-    ├── __init__.py
-    ├── publisher_node.py
-    └── subscriber_node.py
-```
-
----
-
-## Publisher Node
-
-Create the file `py_example/publisher_node.py`:
-
-```python
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-
-
-class SimplePublisher(Node):
-    def __init__(self):
-        super().__init__('simple_publisher')
-        self.publisher_ = self.create_publisher(String, 'chatter', 10)
-        self.timer = self.create_timer(1.0, self.publish_message)
-        self.counter = 0
-        self.get_logger().info('Publisher node started!')
-
-    def publish_message(self):
-        msg = String()
-        msg.data = f'Hello ROS 2! {self.counter}'
-        self.publisher_.publish(msg)
-        self.get_logger().info(f'Publishing: "{msg.data}"')
-        self.counter += 1
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = SimplePublisher()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-### Code Explanation
-
-**Imports:**
-
-```python
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-```
-
-- `rclpy`: The ROS 2 Python client library
-- `Node`: Base class for all ROS 2 nodes
-- `String`: Message type we'll use for communication
-
-**Node Initialization:**
-
-```python
-def __init__(self):
-    super().__init__('simple_publisher')
-```
-
-- Creates a node with the name `simple_publisher`
-
-**Creating the Publisher:**
-
-```python
-self.publisher_ = self.create_publisher(String, 'chatter', 10)
-```
-
-- `String`: Message type to publish
-- `'chatter'`: Topic name
-- `10`: Queue size (how many messages to buffer)
-
-**Creating a Timer:**
-
-```python
-self.timer = self.create_timer(1.0, self.publish_message)
-```
-
-- Calls `publish_message()` every 1.0 second
-
-**Publishing Messages:**
-
-```python
-def publish_message(self):
-    msg = String()
-    msg.data = f'Hello ROS 2! {self.counter}'
-    self.publisher_.publish(msg)
-```
-
-- Creates a message
-- Sets the data field
-- Publishes it to the topic
-
----
-
-## Subscriber Node
-
-Create the file `py_example/subscriber_node.py`:
-
-```python
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-
-
-class SimpleSubscriber(Node):
-    def __init__(self):
-        super().__init__('simple_subscriber')
-        self.subscription = self.create_subscription(
-            String,
-            'chatter',
-            self.listener_callback,
-            10
-        )
-        self.subscription  # prevent unused variable warning
-        self.get_logger().info('Subscriber node started!')
-
-    def listener_callback(self, msg):
-        self.get_logger().info(f'I heard: "{msg.data}"')
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = SimpleSubscriber()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-### Code Explanation
-
-**Creating the Subscription:**
-
-```python
-self.subscription = self.create_subscription(
-    String,
-    'chatter',
-    self.listener_callback,
-    10
-)
-```
-
-- `String`: Message type to subscribe to
-- `'chatter'`: Topic name (must match publisher)
-- `self.listener_callback`: Function to call when message arrives
-- `10`: Queue size
-
-**Callback Function:**
-
-```python
-def listener_callback(self, msg):
-    self.get_logger().info(f'I heard: "{msg.data}"')
-```
-
-- Automatically called whenever a message arrives
-- `msg`: The received message object
-- Access message data with `msg.data`
-
----
-
-## Registering the Nodes
-
-Edit `setup.py` and add the entry points:
+Add URDF and launch files to `data_files`:
 
 ```python
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
-package_name = 'py_example'
+package_name = 'my_robot_description'
 
 setup(
     name=package_name,
@@ -340,550 +204,253 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'urdf'),
+            glob(os.path.join('urdf', '*.urdf'))),
+        (os.path.join('share', package_name, 'launch'),
+            glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
+        (os.path.join('share', package_name, 'config'),
+            glob(os.path.join('config', '*.rviz'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Your Name',
     maintainer_email='you@example.com',
-    description='ROS 2 Workshop Package',
+    description='Robot description package',
     license='Apache-2.0',
     tests_require=['pytest'],
-    entry_points={
-        'console_scripts': [
-            'publisher = py_example.publisher_node:main',
-            'subscriber = py_example.subscriber_node:main',
-        ],
-    },
+    entry_points={},
 )
 ```
 
-The `entry_points` section tells ROS 2 how to run your nodes.
-
 ---
 
-## Package Dependencies
+## Creating the Launch File
 
-Make sure your `package.xml` includes these dependencies:
-
-```xml
-<?xml version="1.0"?>
-<package format="3">
-  <name>py_example</name>
-  <version>0.0.1</version>
-  <description>ROS 2 Workshop Package</description>
-  <maintainer email="you@example.com">Your Name</maintainer>
-  <license>Apache-2.0</license>
-
-  <depend>rclpy</depend>
-  <depend>std_msgs</depend>
-
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>python3-pytest</test_depend>
-
-  <export>
-    <build_type>ament_python</build_type>
-  </export>
-</package>
-```
-
----
-
-## Key Concepts Summary
-
-### Topics
-
-- Named channels for communication
-- Many-to-many: multiple publishers and subscribers can use the same topic
-- Asynchronous: publisher doesn't wait for subscribers
-
-### Messages
-
-- Data structures sent over topics
-- `std_msgs/String` has a single field: `data`
-- Other message types: `Int32`, `Float64`, `Bool`, etc.
-
-### Publishers
-
-- Send messages to a topic
-- Don't know who (if anyone) is listening
-
-### Subscribers
-
-- Listen to messages on a topic
-- Use callback functions to process messages
-- Don't know who is publishing
-
-### Nodes
-
-- Independent processes in your robot system
-- Each node should do one specific task
-- Nodes communicate via topics, services, or actions
-
----
-
-## Expected Behavior
-
-When you run both nodes:
-
-1. Publisher sends a message every second
-2. Subscriber receives and prints each message
-3. Messages contain incrementing counter values
-
-The publisher will show:
-
-```
-[INFO] [simple_publisher]: Publisher node started!
-[INFO] [simple_publisher]: Publishing: "Hello ROS 2! 0"
-[INFO] [simple_publisher]: Publishing: "Hello ROS 2! 1"
-[INFO] [simple_publisher]: Publishing: "Hello ROS 2! 2"
-```
-
-The subscriber will show:
-
-```
-[INFO] [simple_subscriber]: Subscriber node started!
-[INFO] [simple_subscriber]: I heard: "Hello ROS 2! 0"
-[INFO] [simple_subscriber]: I heard: "Hello ROS 2! 1"
-[INFO] [simple_subscriber]: I heard: "Hello ROS 2! 2"
-```
-
----
-
-## Adding Parameters
-
-### What are Parameters?
-
-Parameters allow you to configure your nodes without changing code. They can be set when launching a node or changed while it's running.
-
-### Publisher with Parameters
-
-Let's modify our publisher to use a parameter for the message. Update `py_example/publisher_node.py`:
-
-```python
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-
-
-class SimplePublisher(Node):
-    def __init__(self):
-        super().__init__('simple_publisher')
-        
-        # Declare a parameter with a default value
-        self.declare_parameter('message', 'Hello ROS 2!')
-        
-        # Get the parameter value
-        self.message = self.get_parameter('message').value
-        
-        self.publisher_ = self.create_publisher(String, 'chatter', 10)
-        self.timer = self.create_timer(1.0, self.publish_message)
-        self.counter = 0
-        self.get_logger().info(f'Publisher started with message: {self.message}')
-
-    def publish_message(self):
-        msg = String()
-        msg.data = f'{self.message} {self.counter}'
-        self.publisher_.publish(msg)
-        self.get_logger().info(f'Publishing: "{msg.data}"')
-        self.counter += 1
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = SimplePublisher()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-### What Changed?
-
-**Declaring the parameter:**
-
-```python
-self.declare_parameter('message', 'Hello ROS 2!')
-```
-
-- `'message'`: parameter name
-- `'Hello ROS 2!'`: default value
-
-**Using the parameter:**
-
-```python
-self.message = self.get_parameter('message').value
-```
-
-Gets the current value of the parameter.
-
-### Running with Different Messages
-
-**Run with default message:**
-
-```bash
-ros2 run py_example publisher
-```
-
-**Run with custom message:**
-
-```bash
-ros2 run py_example publisher --ros-args -p message:="Greetings from"
-```
-
-### Parameter Commands
-
-While the node is running, try these commands in another terminal:
-
-**List parameters:**
-
-```bash
-ros2 param list
-```
-
-**Get parameter value:**
-
-```bash
-ros2 param get /simple_publisher message
-```
-
----
-
-## Launch Files
-
-### Why Launch Files?
-
-So far, we've had to open separate terminals for every node. Launch files allow you to start multiple nodes (and even other launch files) with a single command.
-
-### Creating a Launch File
-
-1.  Create a `launch` directory in your package:
-
-    ```bash
-    mkdir launch
-    ```
-
-2.  Create a new file `launch/py_example.launch.py`:
-
-    ```python
-    from launch import LaunchDescription
-    from launch_ros.actions import Node
-
-    def generate_launch_description():
-        return LaunchDescription([
-            Node(
-                package='py_example',
-                executable='publisher',
-                name='publisher_node'
-            ),
-            Node(
-                package='py_example',
-                executable='subscriber',
-                name='subscriber_node'
-            )
-        ])
-    ```
-
-### Registering Launch Files
-
-We need to tell ROS 2 to include our launch files when building the package.
-
-1.  Open `setup.py`.
-2.  Add the imports at the top:
-
-    ```python
-    import os
-    from glob import glob
-    ```
-
-3.  Update the `data_files` list to include the launch directory:
-
-    ```python
-    data_files=[
-        ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml']),
-        # Add this line:
-        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
-    ],
-    ```
-
-### Build and Run
-
-1.  Rebuild your workspace:
-
-    ```bash
-    cd ~/ros2_ws
-    colcon build
-    source install/setup.bash
-    ```
-
-2.  Run the launch file:
-
-    ```bash
-    ros2 launch py_example py_example.launch.py
-    ```
-
-    You should see output from both the publisher and subscriber in the same terminal!
-
----
-
-## Services
-
-### What are Services?
-
-While topics are great for continuous data streams, **services** are used for **request-response** interactions. A service client sends a request and waits for the server to respond.
-
-**Use services when:**
-- You need an immediate response
-- You're performing a specific action (e.g., calculate something, trigger a behavior)
-- The operation should complete before continuing
-
-### Service Server
-
-Create `py_example/service_server.py`:
-
-```python
-import rclpy
-from rclpy.node import Node
-from example_interfaces.srv import AddTwoInts
-
-
-class AddTwoIntsServer(Node):
-    def __init__(self):
-        super().__init__('add_two_ints_server')
-        self.srv = self.create_service(
-            AddTwoInts,
-            'add_two_ints',
-            self.add_two_ints_callback
-        )
-        self.get_logger().info('AddTwoInts server ready!')
-
-    def add_two_ints_callback(self, request, response):
-        response.sum = request.a + request.b
-        self.get_logger().info(f'Incoming request: a={request.a}, b={request.b} -> sum={response.sum}')
-        return response
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = AddTwoIntsServer()
-    rclpy.spin(node)
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-### Code Explanation
-
-**Service Type:**
-
-```python
-from example_interfaces.srv import AddTwoInts
-```
-
-`AddTwoInts` is a standard service with two request fields (`a`, `b`) and one response field (`sum`).
-
-**Creating the Service:**
-
-```python
-self.srv = self.create_service(AddTwoInts, 'add_two_ints', self.add_two_ints_callback)
-```
-
-- `AddTwoInts`: Service message type
-- `'add_two_ints'`: Service name (topic-like name)
-- `self.add_two_ints_callback`: Function to handle requests
-
-**Service Callback:**
-
-```python
-def add_two_ints_callback(self, request, response):
-    response.sum = request.a + request.b
-    return response
-```
-
-- Receives `request` and `response` objects
-- Populates the response
-- **Must return the response**
-
-### Service Client
-
-Create `py_example/service_client.py`:
-
-```python
-import rclpy
-from rclpy.node import Node
-from example_interfaces.srv import AddTwoInts
-
-
-class AddTwoIntsClient(Node):
-    def __init__(self):
-        super().__init__('add_two_ints_client')
-        self.client = self.create_client(AddTwoInts, 'add_two_ints')
-
-        while not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Service not available, waiting...')
-
-        self.request = AddTwoInts.Request()
-
-    def send_request(self, a, b):
-        self.request.a = a
-        self.request.b = b
-        self.get_logger().info(f'Sending request: a={a}, b={b}')
-        future = self.client.call_async(self.request)
-        rclpy.spin_until_future_complete(self, future)
-        return future.result()
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    client = AddTwoIntsClient()
-    response = client.send_request(5, 3)
-    client.get_logger().info(f'Result: {response.sum}')
-    client.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-### Client Code Explanation
-
-**Wait for Service:**
-
-```python
-while not self.client.wait_for_service(timeout_sec=1.0):
-    self.get_logger().info('Service not available, waiting...')
-```
-
-Blocks until the service is ready.
-
-**Send Request:**
-
-```python
-future = self.client.call_async(self.request)
-rclpy.spin_until_future_complete(self, future)
-return future.result()
-```
-
-- `call_async()`: Sends the request
-- `spin_until_future_complete()`: Waits for the response
-- `future.result()`: Returns the response
-
-### Registering Service Nodes
-
-Add to `setup.py`:
-
-```python
-entry_points={
-    'console_scripts': [
-        'talker = py_example.simple_publisher:main',
-        'listener = py_example.simple_subscriber:main',
-        'talker_params = py_example.publisher_param:main',
-        'add_two_ints_server = py_example.service_server:main',
-        'add_two_ints_client = py_example.service_client:main',
-    ],
-},
-```
-
-### Add Service Dependency
-
-Update `package.xml` to include the service interface package:
-
-```xml
-<depend>rclpy</depend>
-<depend>std_msgs</depend>
-<depend>example_interfaces</depend>
-```
-
-### Running Services
-
-**Terminal 1 - Start the server:**
-
-```bash
-ros2 run py_example add_two_ints_server
-```
-
-**Terminal 2 - Call the service with client:**
-
-```bash
-ros2 run py_example add_two_ints_client
-```
-
-**Or use ROS 2 CLI to test:**
-
-```bash
-# List available services
-ros2 service list
-
-# Call the service from command line
-ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 10, b: 20}"
-```
-
-### Launch File for Services
-
-Create `launch/services.launch.py`:
+Create `launch/view_robot.launch.py`:
 
 ```python
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import os
 
 
 def generate_launch_description():
+    urdf_path = os.path.join(
+        get_package_share_directory('my_robot_description'),
+        'urdf',
+        'my_robot.urdf'
+    )
+
+    with open(urdf_path, 'r') as f:
+        robot_desc = f.read()
+
     return LaunchDescription([
+        # Publish joint states
         Node(
-            package='py_example',
-            executable='add_two_ints_server',
-            name='add_two_ints_server',
-            output='screen',
+            package='joint_state_publisher',
+            executable='joint_state_publisher',
+            name='joint_state_publisher',
+            output='screen'
         ),
+        # Publish robot transforms
         Node(
-            package='py_example',
-            executable='add_two_ints_client',
-            name='add_two_ints_client',
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
             output='screen',
+            parameters=[{'robot_description': robot_desc}]
         ),
+        # RViz visualization
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            output='screen',
+            arguments=['-d', os.path.join(
+                get_package_share_directory('my_robot_description'),
+                'config',
+                'urdf.rviz'
+            )]
+        )
     ])
 ```
 
-Run both together:
+### What Each Node Does
 
-```bash
-ros2 launch py_example services.launch.py
+| Node | Purpose |
+|------|---------|
+| `joint_state_publisher` | Publishes joint positions (required for TF) |
+| `robot_state_publisher` | Reads URDF and publishes TF transforms |
+| `rviz2` | 3D visualization |
+
+---
+
+## Creating the RViz Configuration
+
+Create `config/urdf.rviz`:
+
+```yaml
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Description Topic:
+        Value: /robot_description
+      Enabled: true
+      Name: RobotModel
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Value: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1
+      Name: Current View
+      Pitch: 0.5
+      Yaw: 0.8
 ```
 
-### Services vs Topics Summary
+---
 
-| Feature | Topics | Services |
-|---------|--------|----------|
-| Pattern | Pub/Sub | Request/Response |
-| Direction | Many-to-many | One-to-one |
-| Response | None | Yes |
-| Use case | Continuous data | Commands/Queries |
-| Example | Sensor data | Calculate sum |
+## Build and Run
+
+```bash
+cd ~/ros2_ws
+colcon build
+source install/setup.bash
+ros2 launch my_robot_description view_robot.launch.py
+```
+
+### In RViz
+
+1. Verify **RobotModel** display is enabled (green checkbox)
+2. Set **Fixed Frame** to `base_link` (top left)
+3. You should see a blue box with two gray cylinders (wheels)
+
+Use your mouse:
+- **Left-click + drag** - Rotate camera
+- **Right-click + drag** - Pan
+- **Scroll wheel** - Zoom
 
 ---
 
-## Next Steps
+## Visualizing the TF Tree
 
-After mastering publishers, subscribers, parameters, and services:
+To see your robot's coordinate frame tree:
 
-- Try using different message types
-- Create custom message types and services
-- Learn about actions for long-running tasks
-- Explore ROS 2 bags for recording/playback
+```bash
+ros2 run tf2_tools view_frames.py
+evince frames.pdf    # or open with any PDF viewer
+```
+
+This generates a diagram showing:
+- All coordinate frames
+- Parent-child relationships
+- Transform values
 
 ---
 
-## Learning Resources
+## Troubleshooting
 
-### Official Documentation
+### Robot Not Showing in RViz
 
-- ROS 2 Docs: https://docs.ros.org/en/jazzy/
-- ROS 2 Tutorials: https://docs.ros.org/en/jazzy/Tutorials.html
+**Symptom:** Grid visible, but no robot
+
+**Causes:**
+1. **Wrong Fixed Frame** - Set it to `base_link`
+2. **RobotModel not enabled** - Check the green checkbox
+3. **robot_state_publisher not running** - Check launch output
+
+**Debug:**
+```bash
+ros2 topic list              # Should see /robot_description
+ros2 topic echo /tf          # Should see transform data
+```
+
+### Robot Appears at Origin Only
+
+**Symptom:** Robot visible but can't move/rotate
+
+**Cause:** `joint_state_publisher` not publishing
+
+**Debug:**
+```bash
+ros2 node list               # Should see joint_state_publisher
+ros2 topic echo /joint_states
+```
+
+### "Package not found" Error
+
+**Cause:** Workspace not sourced after build
+
+**Fix:**
+```bash
+source ~/ros2_ws/install/setup.bash
+```
+
+### RViz Shows "No Transform"
+
+**Cause:** TF tree not publishing
+
+**Fix:**
+1. Check that both `joint_state_publisher` and `robot_state_publisher` are running
+2. Verify URDF has valid link/joint hierarchy
+
+---
+
+## Using Meshes Instead of Primitives
+
+Replace primitive shapes with 3D models:
+
+```xml
+<link name="base_link">
+    <visual>
+        <geometry>
+            <mesh filename="package://my_robot_description/meshes/base.stl"
+                  scale="0.001 0.001 0.001"/>
+        </geometry>
+    </visual>
+</link>
+```
+
+**Important:** The `scale` attribute converts from millimeters (CAD default) to meters (ROS standard).
+
+**Supported formats:** `.stl`, `.dae` (Collada), `.obj`
+
+---
+
+## Next: Xacro (XML Macros)
+
+For complex robots, URDF becomes repetitive. The next branch (`feature/07-xacro`) covers:
+- Defining reusable components (e.g., "wheel" macro)
+- Using properties and math expressions
+- Including sub-files for modular design
+
+---
+
+## Summary
+
+You've learned:
+- URDF describes robot structure (links + joints)
+- Launch files start multiple nodes together
+- RViz visualizes the robot model
+- TF transforms connect coordinate frames
+
+Proceed to `feature/07-xacro` to learn how to simplify complex URDFs.

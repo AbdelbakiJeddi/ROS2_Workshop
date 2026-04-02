@@ -286,49 +286,6 @@ def generate_launch_description():
 
 ---
 
-## Creating the RViz Configuration
-
-Create `config/urdf.rviz`:
-
-```yaml
-Panels:
-  - Class: rviz_common/Displays
-    Name: Displays
-Visualization Manager:
-  Displays:
-    - Alpha: 0.5
-      Cell Size: 1
-      Class: rviz_default_plugins/Grid
-      Name: Grid
-      Value: true
-    - Alpha: 1
-      Class: rviz_default_plugins/RobotModel
-      Description Topic:
-        Value: /robot_description
-      Enabled: true
-      Name: RobotModel
-      Value: true
-    - Class: rviz_default_plugins/TF
-      Name: TF
-      Value: true
-  Global Options:
-    Background Color: 48; 48; 48
-    Fixed Frame: base_link
-    Frame Rate: 30
-  Tools:
-    - Class: rviz_default_plugins/MoveCamera
-  Value: true
-  Views:
-    Current:
-      Class: rviz_default_plugins/Orbit
-      Distance: 1
-      Name: Current View
-      Pitch: 0.5
-      Yaw: 0.8
-```
-
----
-
 ## Build and Run
 
 ```bash
@@ -337,18 +294,6 @@ colcon build
 source install/setup.bash
 ros2 launch my_robot_description view_robot.launch.py
 ```
-
-### In RViz
-
-1. Verify **RobotModel** display is enabled (green checkbox)
-2. Set **Fixed Frame** to `base_link` (top left)
-3. You should see a blue box with two gray cylinders (wheels)
-
-Use your mouse:
-- **Left-click + drag** - Rotate camera
-- **Right-click + drag** - Pan
-- **Scroll wheel** - Zoom
-
 ---
 
 ## Visualizing the TF Tree
@@ -364,54 +309,6 @@ This generates a diagram showing:
 - All coordinate frames
 - Parent-child relationships
 - Transform values
-
----
-
-## Troubleshooting
-
-### Robot Not Showing in RViz
-
-**Symptom:** Grid visible, but no robot
-
-**Causes:**
-1. **Wrong Fixed Frame** - Set it to `base_link`
-2. **RobotModel not enabled** - Check the green checkbox
-3. **robot_state_publisher not running** - Check launch output
-
-**Debug:**
-```bash
-ros2 topic list              # Should see /robot_description
-ros2 topic echo /tf          # Should see transform data
-```
-
-### Robot Appears at Origin Only
-
-**Symptom:** Robot visible but can't move/rotate
-
-**Cause:** `joint_state_publisher` not publishing
-
-**Debug:**
-```bash
-ros2 node list               # Should see joint_state_publisher
-ros2 topic echo /joint_states
-```
-
-### "Package not found" Error
-
-**Cause:** Workspace not sourced after build
-
-**Fix:**
-```bash
-source ~/ros2_ws/install/setup.bash
-```
-
-### RViz Shows "No Transform"
-
-**Cause:** TF tree not publishing
-
-**Fix:**
-1. Check that both `joint_state_publisher` and `robot_state_publisher` are running
-2. Verify URDF has valid link/joint hierarchy
 
 ---
 
@@ -436,18 +333,10 @@ Replace primitive shapes with 3D models:
 
 ---
 
-## Next: Xacro (XML Macros)
-
-For complex robots, URDF becomes repetitive. The next branch (`feature/07-xacro`) covers:
-- Defining reusable components (e.g., "wheel" macro)
-- Using properties and math expressions
-- Including sub-files for modular design
-
----
-
 ## Summary
 
 You've learned:
+
 - URDF describes robot structure (links + joints)
 - Launch files start multiple nodes together
 - RViz visualizes the robot model
